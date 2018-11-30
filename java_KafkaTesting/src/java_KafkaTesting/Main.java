@@ -2,6 +2,7 @@ package java_KafkaTesting;
 
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.clients.admin.*;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -11,6 +12,36 @@ public class Main {
 
 	public static void main(String[] args) {
 		ConsumerTest();
+	}
+
+	// ???
+	static void AdminClientTest() {
+		Properties props = new Properties();
+		props.put("bootstrap.servers", "localhost:2181");
+		props.put("connections.max.idle.ms", 10000);
+		props.put("request.timeout.ms", 5000);
+		try (AdminClient client = KafkaAdminClient.create(props)) {
+			ListTopicsResult topics = client.listTopics();
+			java.util.Set<String> names = topics.names().get();
+			if (names.isEmpty()) {
+				System.out.println("BBVB");
+			}
+		} catch (InterruptedException | java.util.concurrent.ExecutionException exp) {
+			System.out.println(exp);
+			// kafka not available
+		}
+	}
+
+	// ???
+	static void zkTest() {
+		/* ???
+		ZkClient zkClient = new ZkClient("your_zookeeper_server", 5000 , 5000 , ZKStringSerializer$.MODULE$);
+		List<Broker> brokers = scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllBrokersInCluster());
+		if (brokers.isEmpty()) {
+		    // No brokers available
+		} else {
+		    // There are brokers available
+		}*/
 	}
 
 	static void ConsumerTest() {
