@@ -1,35 +1,20 @@
 package sparkTesting;
 
+// // // structured streaming //
 import org.apache.spark.sql.*;
-import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.StreamingQueryException;
-import org.apache.spark.sql.types.StructType;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
-import java.io.*;
-
+import org.apache.spark.api.java.function.FlatMapFunction;
+// // //
+// // // streaming //
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkContext;
-import org.apache.spark.TaskContext;
-import org.apache.spark.api.java.*;
-import org.apache.spark.api.java.function.*;
-import org.apache.spark.streaming.Durations;
-import org.apache.spark.streaming.Seconds;
-import org.apache.spark.streaming.StreamingContext;
+import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.kafka010.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import scala.Tuple2;
-
+// // // 
+import java.util.*;
 
 public class SparkMain {
 
@@ -40,6 +25,7 @@ public class SparkMain {
 		System.out.println("end");
 	}
 
+	// SPARK STRUCTURED STREAMING
 	public static void sparkTest1() {
 		// https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/SparkSession.html
 		SparkSession spark = SparkSession.builder().appName("Ex1").master("local").getOrCreate();
@@ -55,21 +41,15 @@ public class SparkMain {
 		// Split the lines into words
 		/* .as(Encoder<U> encoder) -  Returns a new Dataset where each record has been mapped on to the specified type
 		 * .flatmap(FlatMapFunction<T, U> f, Encoder<U> encoder) -  (Java-specific) Returns a new Dataset by first applying a function to all elements of this Dataset, and then flattening the results		*/
-		//Dataset<String> words = lines.as(Encoders.STRING()).flatMap((FlatMapFunction<String, String>) x -> Arrays.asList(x.split(" ")).iterator(), Encoders.STRING());
-		//Dataset<Row> wordCounts = words.groupBy("value").count(); // running word count
+		Dataset<String> words = lines.as(Encoders.STRING()).flatMap((FlatMapFunction<String, String>) x -> Arrays.asList(x.split(" ")).iterator(), Encoders.STRING());
+		Dataset<Row> wordCounts = words.groupBy("value").count(); // running word count
 
 		// Start running the query that prints the running counts to the console
 		/*	.writeStream() => http://spark.apache.org/docs/2.4.0/api/java/index.html?org/apache/spark/sql/streaming/DataStreamWriter.html
 		 * 	.outputMode(String outputMode) - Specifies how data of a streaming DataFrame/Dataset is written to a streaming sink
 		 * 	.format(String src) - Specifies the underlying output data source
 		 * 	.start() - Starts the execution of the streaming query, which will continually output results to the given path as new data arrives		*/
-		//StreamingQuery query = wordCounts.writeStream().outputMode("complete").format("console").start();
-
-		// Write to Kafka?
-		/*  
-		 * 
-		 */
-		StreamingQuery query = lines.as(Encoders.STRING()).writeStream().format("kafka").option("checkpointLocation", "java_KafkaTesting/src/").option("kafka.bootstrap.servers", "localhost:9092").option("topic", "mytopic").start();
+		StreamingQuery query = wordCounts.writeStream().outputMode("complete").format("console").start();
 
 		try {
 			query.awaitTermination();
@@ -78,8 +58,26 @@ public class SparkMain {
 		}
 	}
 
+	// SPARK STREAMING 
 	public static void sparkTest2() {
-		
+		Map<String, Object> kafkaParams = new HashMap<>();
+		kafkaParams.put("bootstrap.servers", "localhost:9092");
+		kafkaParams.put("key.deserializer", StringDeserializer.class);
+		kafkaParams.put("value.deserializer", StringDeserializer.class);
+		kafkaParams.put("group.id", "use_a_separate_group_id_for_each_stream");
+		kafkaParams.put("auto.offset.reset", "latest");
+		kafkaParams.put("enable.auto.commit", false);
+		Collection<String> topics = Arrays.asList("mytopic");
+		SparkConf conf = new SparkConf().setAppName("sparkEx2").setMaster("local[*]");
+		JavaStreamingContext ssc = new JavaStreamingContext(conf, new Duration(1000));
+		JavaInputDStream<ConsumerRecord<String, String>> stream = KafkaUtils.createDirectStream(ssc, LocationStrategies.PreferConsistent(), ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams));
+		stream.map(r -> r.value().toString()).print();
+		ssc.start();
+		try {
+			ssc.awaitTermination();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 }
 
