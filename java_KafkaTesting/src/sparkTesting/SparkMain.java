@@ -88,7 +88,7 @@ public class SparkMain {
 		JavaDStream<String> lines = stream.map(r -> r.value().toString()); // ?? difference between DStream and InputDStream ??
 		lines.print();
 
-		// Producer init., see just Kafka Java programming 
+		// Producer configuration 
 		Properties props = new Properties();
 		props.put("bootstrap.servers", "localhost:9092");
 		props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -96,8 +96,9 @@ public class SparkMain {
 		props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 		props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
-		// Writing to output Kafka topic
-		// Needed? __If__ sql queries are done on Datasets (?), is writing to Kafka even done from a DStream (??)
+		// Writing to another Kafka topic
+		// Needed? __If__ sql queries are done on Datasets (?), is writing to Kafka even done from a DStream..?
+		/* 	https://spark.apache.org/docs/latest/rdd-programming-guide.html		*/
 		lines.foreachRDD(rdd -> rdd.foreach(s -> {
 			KafkaProducer<String, String> prod = new KafkaProducer<>(props);
 			prod.send(new ProducerRecord<String, String>("mytopic2", s + " @ " + java.time.Instant.now()));
