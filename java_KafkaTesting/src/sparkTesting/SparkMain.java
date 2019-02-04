@@ -13,6 +13,7 @@ import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.kafka010.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.clients.producer.*;
 // // // 
 import java.util.*;
 
@@ -60,18 +61,43 @@ public class SparkMain {
 
 	// SPARK STREAMING 
 	public static void sparkTest2() {
+		// Configuration for Kafka consumer
 		Map<String, Object> kafkaParams = new HashMap<>();
 		kafkaParams.put("bootstrap.servers", "localhost:9092");
 		kafkaParams.put("key.deserializer", StringDeserializer.class);
 		kafkaParams.put("value.deserializer", StringDeserializer.class);
-		kafkaParams.put("group.id", "use_a_separate_group_id_for_each_stream");
+		kafkaParams.put("group.id", "stream1");
 		kafkaParams.put("auto.offset.reset", "latest");
 		kafkaParams.put("enable.auto.commit", false);
 		Collection<String> topics = Arrays.asList("mytopic");
-		SparkConf conf = new SparkConf().setAppName("sparkEx2").setMaster("local[*]");
+
+		/*	https://spark.apache.org/docs/latest/api/java/org/apache/spark/SparkConf.html
+		 * 	.setAppName(String name) - Set a name for your application.
+		 * 	.setMaster(String master) - The master URL to connect to, such as "local" to run locally with one thread, 
+		 * 		"local[4]" to run locally with 4 cores, or "spark://master:7077" to run on a Spark standalone cluster. 		*/
+		SparkConf conf = new SparkConf().setAppName("sparkEx2").setMaster("local"); // "local" or "local[*]" ?
+
+		/*	https://spark.apache.org/docs/latest/api/java/index.html?org/apache/spark/streaming/api/java/JavaStreamingContext.html
+		 	A Java-friendly version of StreamingContext which is the main entry point for Spark Streaming functionality. It provides methods to create JavaDStream and JavaPairDStream from input sources	*/
 		JavaStreamingContext ssc = new JavaStreamingContext(conf, new Duration(1000));
+
 		JavaInputDStream<ConsumerRecord<String, String>> stream = KafkaUtils.createDirectStream(ssc, LocationStrategies.PreferConsistent(), ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams));
-		stream.map(r -> r.value().toString()).print();
+
+		JavaDStream<String> lines = stream.map(r -> r.value().toString()); // ?? difference between DStream and InputDStream ??
+		lines.print();
+
+		Properties props = new Properties();
+		props.put("bootstrap.servers", "localhost:9092");
+		props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+		props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+		props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+		props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+		KafkaProducer<String, String> prod = new KafkaProducer<>(props);
+
+		lines.foreachRDD(r -> {
+			prod.send(new ProducerRecord<String, String>("mytopic", r + " @ " + java.time.Instant.now()));	// not correct, r is not hte ntext line !!
+		});
+
 		ssc.start();
 		try {
 			ssc.awaitTermination();
