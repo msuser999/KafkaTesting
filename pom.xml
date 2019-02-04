@@ -4,6 +4,7 @@
 	<groupId>java_KafkaTesting</groupId>
 	<artifactId>java_KafkaTesting</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+
 	<build>
 		<sourceDirectory>src</sourceDirectory>
 		<plugins>
@@ -17,8 +18,10 @@
 			</plugin>
 		</plugins>
 	</build>
+
 	<dependencies>
 
+		<!-- generated automatically? -->
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>javax.servlet-api</artifactId>
@@ -32,6 +35,8 @@
 			<artifactId>paranamer</artifactId>
 			<version>2.8</version>
 		</dependency>
+
+		<!-- -->
 
 		<!-- STREAMING -->
 		<!-- https://mvnrepository.com/artifact/org.apache.spark/spark-streaming -->
@@ -69,6 +74,8 @@
 			<version>2.4.0</version>
 			<scope>provided</scope>
 		</dependency>
+
+		<!-- -->
 
 		<!-- \\\ SPARK SQL \\\ -->
 		<!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
