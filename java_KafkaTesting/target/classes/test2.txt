@@ -1,0 +1,76 @@
+package spark;
+
+import java.util.*;
+import java.util.regex.Pattern;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.TaskContext;
+import org.apache.spark.api.java.*;
+import org.apache.spark.api.java.function.*;
+import org.apache.spark.streaming.Durations;
+import org.apache.spark.streaming.Seconds;
+import org.apache.spark.streaming.StreamingContext;
+import org.apache.spark.streaming.api.java.*;
+import org.apache.spark.streaming.kafka010.*;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import scala.Tuple2;
+
+public class SparkApp {
+	public static void main(String[] args) throws Exception {
+		
+		/*
+		 * Specify core Kafka parameters for data consumption:
+		 * 
+		 * 	 bootstrap-servers 	 -  Kafka cluster's host-port pair
+		 *   key.deserializer &  -  Kafka streams output key-value pairs, where key
+		 *   value.deserializer  	key is used to identify the topic to write to, while
+		 *   						value is the actual payload.
+		 *   group.id            -  Like any Consumer, Spark belongs to a Consumer group, 
+		 *   						which uniquely identifies the set of processes where
+		 *   						a Consumer belongs.
+		 *   auto.offset.rest	 -  Specifies the setting of offsets in a situation where
+		 *   						not one exists (e.g. when the cluster is initialized
+		 *   						or because of data deletion)
+		 *   enable.auto.commit  -  A boolean value indicating whether the Consumer's
+		 *   						offset should be periodically committed in the background
+		 *   
+		 * See also: https://kafka.apache.org/documentation/#consumerconfigs
+		 */
+		Map<String, Object> kafkaParams = new HashMap<>();
+		kafkaParams.put("bootstrap.servers", "localhost:9092");
+		kafkaParams.put("key.deserializer", StringDeserializer.class);
+		kafkaParams.put("value.deserializer", StringDeserializer.class);
+		kafkaParams.put("group.id", "use_a_separate_group_id_for_each_stream");
+		kafkaParams.put("auto.offset.reset", "latest");
+		kafkaParams.put("enable.auto.commit", false);
+		
+		final Pattern SPACE = Pattern.compile(" ");
+		
+		SparkConf sparkConf = new SparkConf()
+						          .setMaster("local")
+						          .setAppName("can-spark");
+
+		Set<String> topics = new HashSet<>();
+		topics.add("example");
+		JavaStreamingContext jssc = new JavaStreamingContext(sparkConf, Durations.seconds(2));
+		
+	    JavaInputDStream<ConsumerRecord<String, String>> messages = KafkaUtils.createDirectStream(
+	        jssc,
+	        LocationStrategies.PreferConsistent(),
+	        ConsumerStrategies.Subscribe(topics, kafkaParams)
+	    );
+
+	    /* Wordcount procedure */
+	    JavaDStream<String> lines = messages.map(ConsumerRecord::value);
+	    JavaDStream<String> words = lines.flatMap(x -> Arrays.asList(SPACE.split(x)).iterator());
+	    JavaPairDStream<String, Integer> wordCounts = words.mapToPair(s -> new Tuple2<>(s, 1))
+	        .reduceByKey((i1, i2) -> i1 + i2);
+	    wordCounts.print();
+
+	    jssc.start();
+	    jssc.awaitTermination();
+	}
+}
