@@ -59,46 +59,54 @@ public class SparkMain {
 		props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 		props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
-		// Make an SQL query on incoming messages and send results to Kafka
-		/*	https://spark.apache.org/docs/latest/api/java/index.html?org/apache/spark/api/java/JavaRDD.html		
-		 * 	https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/SparkSession.html
-		 * 	https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/Dataset.html		*/
-		/*
-		String outputTopic = "mytopic2";
-		KafkaProducer<String, String> prod = new KafkaProducer<>(props);
-		JavaDStream<String> words = lines.flatMap(x -> Arrays.asList(x.split(" ")).iterator()); // Split each line into words
-		words.foreachRDD(rdd -> {
-			// Get the singleton instance of SparkSession
-			SparkSession spark = SparkSession.builder().config(rdd.context().getConf()).getOrCreate(); // sparkContext() (in tutorial) == context() ???
-		
-			// Create a Dataset
-			Dataset<String> ds = spark.createDataset(JavaRDD.toRDD(rdd), Encoders.STRING());
-			ds.createOrReplaceTempView("words"); // table name ?
-		
-			// Make a query on  Dataset
-			Dataset<Row> ds2 = spark.sql("SELECT * FROM words");
-			ds2.show(); // prints the dataset
-		
-			// Send dataset to Kafka
-			List<String> ds3 = ds2.as(Encoders.STRING()).collectAsList();
-			ds3.forEach(e -> prod.send(new ProducerRecord<String, String>(outputTopic, e + " @ " + java.time.Instant.now())));
-		});*/
+		jsonStreamTest(lines);
 
-		// JSON stream testing
-		lines.foreachRDD(rdd -> {
-			SparkSession spark = SparkSession.builder().config(rdd.context().getConf()).getOrCreate();
-			Dataset<String> ds = spark.createDataset(JavaRDD.toRDD(rdd), Encoders.STRING());
-			Dataset<Row> ds2 = spark.read().json(ds);
-			ds2.show();
-		});
+		KafkaProducer<String, String> prod = new KafkaProducer<>(props);
+		//splitLinesTest(lines, prod);
 
 		ssc.start();
 		try {
 			ssc.awaitTermination();
-			//prod.close();
+			prod.close();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+	}
+
+	//Send JSON from Kafka and create Dataset table from the data
+	/* 	JSON Lines or newline-delimited JSOon (ndjson)	
+	 * 		http://jsonlines.org/examples/	
+	 * 		https://github.com/ndjson/ndjson-spec
+	 * 	https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/DataFrameReader.html 	*/
+	public static void jsonStreamTest(JavaDStream<String> lines) {
+		lines.foreachRDD(rdd -> {
+			SparkSession spark = SparkSession.builder().config(rdd.context().getConf()).getOrCreate();
+			Dataset<String> ds = spark.createDataset(JavaRDD.toRDD(rdd), Encoders.STRING()); //
+			Dataset<Row> ds2 = spark.read().json(ds); // .read() -> DataframeReader -> .json() -> Dataset<Row>
+			ds2.show();
+		});
+	}
+
+	// Make an SQL query on incoming messages and send results to Kafka
+	/*	https://spark.apache.org/docs/latest/api/java/index.html?org/apache/spark/api/java/JavaRDD.html		
+	 * 	https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/SparkSession.html
+	 * 	https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/Dataset.html		*/
+	public static void splitLinesTest(JavaDStream<String> lines, KafkaProducer<String, String> prod) {
+		String outputTopic = "mytopic2";
+		JavaDStream<String> words = lines.flatMap(x -> Arrays.asList(x.split(" ")).iterator()); // Split each line into words
+		words.foreachRDD(rdd -> {
+			// Get the singleton instance of SparkSession
+			SparkSession spark = SparkSession.builder().config(rdd.context().getConf()).getOrCreate(); // sparkContext() (in tutorial) == context() ???
+			// Create a Dataset
+			Dataset<String> ds = spark.createDataset(JavaRDD.toRDD(rdd), Encoders.STRING());
+			ds.createOrReplaceTempView("words"); // table name ?
+			// Make a query on  Dataset
+			Dataset<Row> ds2 = spark.sql("SELECT * FROM words");
+			ds2.show(); // prints the dataset
+			// Send dataset to Kafka
+			List<String> ds3 = ds2.as(Encoders.STRING()).collectAsList();
+			ds3.forEach(e -> prod.send(new ProducerRecord<String, String>(outputTopic, e + " @ " + java.time.Instant.now())));
+		});
 	}
 }
 
