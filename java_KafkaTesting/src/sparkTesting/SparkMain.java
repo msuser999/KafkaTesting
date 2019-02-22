@@ -11,6 +11,8 @@ import org.apache.spark.streaming.kafka010.*;
 import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
+import java.io.IOException;
 import java.util.*;
 
 // code cleanup, new class to avoid issues (replace SparkApp with this if works)
@@ -34,7 +36,7 @@ public class SparkMain {
 			queries.put(tableName, Arrays.asList(query));
 		}
 	}
-	
+
 	public static void webSparkTest() {
 		String srcTopic = "mytopic";
 		Collection<String> topics = Arrays.asList(srcTopic);
@@ -43,6 +45,7 @@ public class SparkMain {
 		JavaStreamingContext ssc = new JavaStreamingContext(conf, new Duration(4000));
 		ssc.sparkContext().setLogLevel("ERROR");
 		JavaInputDStream<ConsumerRecord<String, String>> stream = KafkaUtils.createDirectStream(ssc, LocationStrategies.PreferConsistent(), ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams));
+
 		JavaDStream<String> lines = stream.map(r -> r.value().toString());
 		lines.print();
 
@@ -50,11 +53,19 @@ public class SparkMain {
 		words.foreachRDD(rdd -> {
 			SparkSession spark = SparkSession.builder().config(rdd.context().getConf()).getOrCreate();
 			Dataset<String> ds = spark.createDataset(JavaRDD.toRDD(rdd), Encoders.STRING());
-			String table = "words";
-			ds.createOrReplaceTempView(table);
-			Dataset<Row> ds2 = spark.sql("SELECT * FROM " + table);
+			String tableName = "words";
+			ds.createOrReplaceTempView(tableName);
+			Dataset<Row> ds2 = spark.sql("SELECT * FROM " + tableName);
 			ds2.show();
 		});
+
+		WebInterface wb;
+		try {
+			wb = new WebInterface();
+			wb.run();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
 
 		ssc.start();
 		try {
